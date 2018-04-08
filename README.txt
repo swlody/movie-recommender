@@ -10,11 +10,11 @@ Using pypy for the full dataset saves a lot of time - ~33%
 
 TODO:
 a)
-	"Cross-validation" to objectively compare results of different algorithms
+	k-fold cross-validation to objectively compare results of different algorithms
 	Find the "most-similar" movie given a single (or list of) movies
 	Try some different methods out:
 		Bayesian networks
-		Machine learning / clustering? Markov decision process? Decision tree (NN would probably be better)?
+		Machine learning / clustering / pattern recognition? Markov decision process? Decision tree (NN would probably be better)?
 		Recall@k / precision@k
 	Higher weights to similar movies with similar genre tags - especially for movies where few ratings are available
 
