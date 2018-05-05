@@ -4,19 +4,25 @@ Uses GroupLens dataset from https://grouplens.org/datasets/movielens/ - either m
 
 Using the full dataset right now takes a significant amount of time now - around 25-30 seconds on an SSD with an i5, because the entire dataset needs to be read in from file each time the program is run.
 
-Usage: recommendmovie.py [-h] [-f] [-m] [-t] [-c] user-id movies [movies ...]
+usage: recommendmovie.py [-h] [-f] [-m] [-t] [-r [percent]]
+                         [-p | -c | -e | -b]
+                         user-id movies
 
 Using pypy for the full dataset saves a lot of time - ~33%
 
 TODO:
 a)
 	k-fold cross-validation to objectively compare results of different algorithms
-	Find the "most-similar" movie given a single (or list of) movies
+	Find the "most-similar" movie, or k movies given a single (or list of) movies
 	Try some different methods out:
+		Content-based filtering
+		Combinations of different techniques (essentially feature-weighted linear stacking?)
 		Bayesian networks
-		Machine learning / clustering / pattern recognition? Markov decision process? Decision tree (NN would probably be better)?
+		Machine learning / clustering / pattern recognition?
+		Markov decision process? Decision tree?
 		Recall@k / precision@k
 	Higher weights to similar movies with similar genre tags - especially for movies where few ratings are available
+		This is essentially collaborative filtering x content-based filtering?
 
 b)
 	Allow user to enter movie name instead of ID - fuzzy search
@@ -24,3 +30,4 @@ b)
 		Correlation thresholding - only compare to neighbors above a certain threshold
 		Best-n-neighbor - best n neighbors with highest correlations
 		Keep database in memory and allow new searches
+		Convert CSV to database format for fast searches?
