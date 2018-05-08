@@ -14,9 +14,9 @@ def init_parser():
                         help="The user ID from ratings.csv to predict ratings for.")
     parser.add_argument('ids', metavar='movies', nargs='*',
                         help="A list of movies (IMDb IDs) to predict the ratings of.")
-    # This is ignored for the cross-validation routine, it would probably take a while
     parser.add_argument('-g', '--genres', action='store_true',
                         help="Use tf-idf for genres as a weighting for collaborative filtering.")
+    # This is ignored for the cross-validation routine, it would probably take a while
     parser.add_argument('-f', '--full', action='store_true',
                         help="Use the full dataset rather than the small dataset.")
     parser.add_argument('-m', '--movielens', action='store_true',
@@ -46,20 +46,15 @@ def main():
     args = parser.parse_args()
     if args.rmse:
         # run the cross validation routine
-        if 0 > args.rmse > 100:
+        if not 0 < args.rmse < 100:
             parser.error("cross-validation percent needs to be between 0 and 100.")
         # get all the movies and their genres from the database
         movies = get_movies_from_ids(None, True, args.full)
         print(" Cosine RMSE:        Pearson RMSE:       Euclidean RMSE:       Genre RMSE:")
         print(calculate_rmse_for_each_distance_measure(args.rmse, movies))
     else:
-        # Convert TMDb/IMDb IDs to MovieLens IDs
-        if args.movielens:
-            movie_ids = args.ids
-        elif args.tmdb:
-            movie_ids = get_movie_ids_from_webdb_ids(args.ids, args.full, tmdb=True)
-        else:
-            movie_ids = get_movie_ids_from_webdb_ids(args.ids, args.full)
+        # Convert TMDb/IMDb IDs to MovieLens IDs if they aren't provided as such
+        movie_ids = args.ids if args.movielens else get_movie_ids_from_webdb_ids(args.ids, args.full, args.tmdb)
 
         if not args.user_id:
             parser.error("user-id required when not performing cross-validation routine.")
@@ -80,13 +75,15 @@ def calculate_rmse_for_each_distance_measure(percent, movies):
     # The full dataset probably takes days, I didn't try it....
     # either way, this is pretty badly optimized, some places for optimization have been tagged with TODOs
 
+    ratio = percent / 100
     # mapping of uids to their ratings
     uid_to_ratings = {}
     # mapping of mid to a list of uids that have ratings for the given mid
     mid_to_uids = {}
     with open('ml-latest-small/ratings.csv') as file:
-        next(file)
-        for uid, mid, rating, _ in csv.reader(file):
+        reader = csv.reader(file)
+        next(reader)
+        for uid, mid, rating, _ in reader:
             try:
                 uid_to_ratings[uid][mid] = float(rating)
             except KeyError:
@@ -107,8 +104,8 @@ def calculate_rmse_for_each_distance_measure(percent, movies):
     euclidean_length = 0
     genre_length = 0
     for uid, current_user_ratings in uid_to_ratings.items():
-        if len(current_user_ratings) <= 1 or random() >= (percent / 100):
-            # Skip if the user has one or fewer ratings 
+        if len(current_user_ratings) <= 1 or random() >= ratio:
+            # Skip if the user has one or fewer ratings
             # or if we're randomly skipping this user with probability percent
             continue
         # print(uid)
@@ -125,32 +122,28 @@ def calculate_rmse_for_each_distance_measure(percent, movies):
             our_avg = rating_sum / len(test_ratings)
             try:
                 dif = real_rating
-                dif -= get_rating(test_mid, movies, test_ratings,
-                                  all_other_user_ratings, our_avg)
+                dif -= get_rating(test_mid, movies, test_ratings, all_other_user_ratings, our_avg)
                 dif **= 2
                 pearson_dif += dif
             except ZeroDivisionError:
                 pearson_length -= 1
             try:
                 dif = real_rating
-                dif -= get_rating(test_mid, movies, test_ratings,
-                                  all_other_user_ratings, our_avg, cosine=True)
+                dif -= get_rating(test_mid, movies, test_ratings, all_other_user_ratings, our_avg, cosine=True)
                 dif **= 2
                 cosine_dif += dif
             except ZeroDivisionError:
                 cosine_length -= 1
             try:
                 dif = real_rating
-                dif -= get_rating(test_mid, movies, test_ratings,
-                                  all_other_user_ratings, our_avg, euclidean=True)
+                dif -= get_rating(test_mid, movies, test_ratings, all_other_user_ratings, our_avg, euclidean=True)
                 dif **= 2
                 euclidean_dif += dif
             except ZeroDivisionError:
                 euclidean_length -= 1
             try:
                 dif = real_rating
-                dif -= get_rating(test_mid, movies, test_ratings,
-                                  all_other_user_ratings, our_avg, use_genres=True)
+                dif -= get_rating(test_mid, movies, test_ratings, all_other_user_ratings, our_avg, use_genres=True)
                 dif **= 2
                 genre_dif += dif
             except ZeroDivisionError:
@@ -161,7 +154,7 @@ def calculate_rmse_for_each_distance_measure(percent, movies):
 
 def get_predicted_ratings(user_id, movie_ids, use_genres, full, cosine, euclidean):
     """For a given User ID, predict ratings for each movie in the list of MovieLens IDs using collaborative filtering.
-    "full" specifies that that full database should be used, and "cosine" specifies that 
+    "full" specifies that that full database should be used, and "cosine" specifies that
     the cosine similarity distance function should be used instead of Pearson correlation"""
     our_user_ratings, all_other_user_ratings = get_relevant_user_ratings(user_id, movie_ids, full)
     # Get mappings of movie_ids to Titles / Genres
@@ -170,8 +163,8 @@ def get_predicted_ratings(user_id, movie_ids, use_genres, full, cosine, euclidea
     rating_sum = sum(rating for _, rating in our_user_ratings.items())
     our_avg = rating_sum / len(our_user_ratings)
     for mid in movie_ids:
-        yield movies[mid], get_rating(mid, movies, our_user_ratings,
-                                      all_other_user_ratings, our_avg, use_genres, cosine, euclidean)
+        yield movies[mid], get_rating(mid, movies, our_user_ratings, all_other_user_ratings,
+                                      our_avg, use_genres, cosine, euclidean)
 
 
 def pearson_correlation(our_vector, other_vector, our_avg, other_avg):
@@ -372,11 +365,12 @@ def inverse_document_frequency(genre, corpus, n, smooth):
         return log(n / total)
 
 
-def get_movie_ids_from_webdb_ids(ids, full, tmdb=False):
+def get_movie_ids_from_webdb_ids(ids, full, tmdb):
     """Given a list of IMDb IDs, return a list of Movie IDs corresponding to the same movie in the database"""
     filename = 'ml-latest/links.csv' if full else 'ml-latest-small/links.csv'
     with open(filename) as file:
         reader = csv.reader(file)
+        next(reader)
         if tmdb:
             return [mid for mid, _, tmdb_id in reader if tmdb_id in ids]
         else:
@@ -388,6 +382,7 @@ def get_movies_from_ids(movie_ids, get_all, full):
     filename = 'ml-latest/movies.csv' if full else 'ml-latest-small/movies.csv'
     with open(filename) as file:
         reader = csv.reader(file)
+        next(reader)
         Movie = namedtuple('Movie', ['title', 'genres'])
         if get_all:
             # If we're computing the genre rating, we need the genres for all the movies we'll encounter, not just
@@ -398,7 +393,7 @@ def get_movies_from_ids(movie_ids, get_all, full):
             # that is run AFTER get_relevant_user_ratings()
             return {mid: Movie(title, genres.split('|')) for mid, title, genres in reader}
         else:
-            return {mid: Movie(title, genres.split('|')) for mid, title, genres in reader if mid in movie_ids}        
+            return {mid: Movie(title, genres.split('|')) for mid, title, genres in reader if mid in movie_ids}
 
 
 def get_relevant_user_ratings(user_id, movie_ids, full):
