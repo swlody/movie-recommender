@@ -11,7 +11,7 @@ def init_parser():
     parser = ArgumentParser(description="Given a User ID from the MovieLens database, "
                                         "predict the user's scores for specified movies.")
     parser.add_argument('user_id', metavar='user-id', nargs='?',
-                        help="The User ID from ratings.csv to predict ratings for.")
+                        help="The user ID from ratings.csv to predict ratings for.")
     parser.add_argument('ids', metavar='movies', nargs='*',
                         help="A list of movies (IMDb IDs) to predict the ratings of.")
     # This is ignored for the cross-validation routine, it would probably take a while
@@ -46,7 +46,7 @@ def main():
     args = parser.parse_args()
     if args.rmse:
         # run the cross validation routine
-        if args.rmse > 100 or args.rmse < 0:
+        if 0 > args.rmse > 100:
             parser.error("cross-validation percent needs to be between 0 and 100.")
         # get all the movies and their genres from the database
         movies = get_movies_from_ids(None, True, args.full)
@@ -312,9 +312,9 @@ def get_genre_weight(our_user_ratings, other_user_ratings, our_genre_frequencies
     for mid, _ in our_user_ratings.items():
         for genre in movies[mid].genres:
             if genre not in our_vector:
-                other_vector[genre] = tf_idf(genre_frequencies, movies, genre, corpus, n,
+                other_vector[genre] = tf_idf(genre_frequencies, genre, corpus, n,
                                              augmented, boolean, logarithmic, smooth)
-                our_vector[genre] = tf_idf(our_genre_frequencies, movies, genre, corpus, n,
+                our_vector[genre] = tf_idf(our_genre_frequencies, genre, corpus, n,
                                            augmented, boolean, logarithmic, smooth)
     if cosine:
         return cosine_similarity(our_vector, other_vector)
