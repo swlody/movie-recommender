@@ -3,6 +3,7 @@ from argparse import ArgumentParser
 from collections import namedtuple
 from math import sqrt, log
 from random import random
+from typing import Dict, List, Optional, NamedTuple
 import csv
 
 
@@ -51,7 +52,7 @@ def main():
         # get all the movies and their genres from the database
         movies = get_movies_from_ids(None, True, args.full)
         print(" Cosine RMSE:        Pearson RMSE:       Euclidean RMSE:       Genre RMSE:")
-        print(calculate_rmse_for_each_distance_measure(args.rmse, movies))
+        print(calculate_rmse_for_each_distance_measure(args.rmse, movies), "\a")
     else:
         # Convert TMDb/IMDb IDs to MovieLens IDs if they aren't provided as such
         movie_ids = args.ids if args.movielens else get_movie_ids_from_webdb_ids(args.ids, args.full, args.tmdb)
@@ -67,7 +68,8 @@ def main():
             print(movie, "| Predicted rating:", round_stars(rating), "stars")
 
 
-def calculate_rmse_for_each_distance_measure(percent, movies):
+def calculate_rmse_for_each_distance_measure(percent: float,
+                                             movies: Dict[str, NamedTuple]) -> (float, float, float, float):
     """Leave-out-1 cross validation to calculate RMSE for each of the separate distance measures.
     percent defines how much of the data set to use in the cross validation. e.g. percent=80 skips 20% of the uids."""
     # This is pretty gross, hacky, reused code
@@ -152,7 +154,8 @@ def calculate_rmse_for_each_distance_measure(percent, movies):
             sqrt(euclidean_dif / euclidean_length), sqrt(genre_dif / genre_length))
 
 
-def get_predicted_ratings(user_id, movie_ids, use_genres, full, cosine, euclidean):
+def get_predicted_ratings(user_id: str, movie_ids: List[str],
+                          use_genres: bool, full: bool, cosine: bool, euclidean: bool) -> (NamedTuple, float):
     """For a given User ID, predict ratings for each movie in the list of MovieLens IDs using collaborative filtering.
     "full" specifies that that full database should be used, and "cosine" specifies that
     the cosine similarity distance function should be used instead of Pearson correlation"""
@@ -167,7 +170,8 @@ def get_predicted_ratings(user_id, movie_ids, use_genres, full, cosine, euclidea
                                       our_avg, use_genres, cosine, euclidean)
 
 
-def pearson_correlation(our_vector, other_vector, our_avg, other_avg):
+def pearson_correlation(our_vector: Dict[str, float], other_vector: Dict[str, float],
+                        our_avg: float, other_avg: float) -> float:
     """Compute the Pearson correlation between two vectors"""
     numer = 0
     for mid, our_rating in our_vector.items():
@@ -190,7 +194,7 @@ def pearson_correlation(our_vector, other_vector, our_avg, other_avg):
     return 0 if denom == 0 else numer / sqrt(denom)
 
 
-def cosine_similarity(our_vector, other_vector):
+def cosine_similarity(our_vector: Dict[str, float], other_vector: List[Dict[str, float]]) -> float:
     """Compute the cosine similarity between two vectors"""
     numer = 0
     for key, our_score in our_vector.items():
@@ -201,25 +205,25 @@ def cosine_similarity(our_vector, other_vector):
     return numer / denom
 
 
-def euclidean_distance(our_vector, other_vector):
+def euclidean_distance(our_vector: Dict[str, float], other_vector: List[Dict[str, float]]) -> float:
     """Compute the Euclidean distance between two vectors"""
     return sqrt(sum((our_score - other_vector[key]) ** 2
                 for key, our_score in our_vector.items() if key in other_vector))
 
 
-def square_euclidean_distance(our_vector, other_vector):
+def square_euclidean_distance(our_vector: Dict[str, float], other_vector: List[Dict[str, float]]) -> float:
     """Compute the square Euclidean distance between two vectors"""
     return sum((our_score - other_vector[key]) ** 2
                for key, our_score in our_vector.items() if key in other_vector)
 
 
-def manhattan_distance(our_vector, other_vector):
+def manhattan_distance(our_vector: Dict[str, float], other_vector: List[Dict[str, float]]) -> float:
     """Compute the Manhattan distance between two vectors"""
     return sum(abs(our_score - other_vector[key])
                for key, our_score in our_vector.items() if key in other_vector)
 
 
-def bray_curtis_distance(our_vector, other_vector):
+def bray_curtis_distance(our_vector: Dict[str, float], other_vector: List[Dict[str, float]]) -> float:
     """Compute the Bray-Curtis distance between two vectors"""
     numer = 0
     denom = 0
@@ -230,14 +234,16 @@ def bray_curtis_distance(our_vector, other_vector):
     return numer / denom
 
 
-def canberra_distance(our_vector, other_vector):
+def canberra_distance(our_vector: Dict[str, float], other_vector: List[Dict[str, float]]) -> float:
     """Compute the Canberra distance between two vectors"""
     return sum(abs(our_score - other_vector[key]) / (abs(our_score) + abs(other_vector[key]))
                for key, our_score in our_vector.items() if key in other_vector)
 
 
-def get_rating(mid, movies, our_user_ratings, all_other_user_ratings, our_avg,
-               use_genres=False, cosine=False, euclidean=False):
+def get_rating(mid: str,
+               movies: List[str], our_user_ratings: Dict[str, float], all_other_user_ratings: List[Dict[str, float]],
+               our_avg: float,
+               use_genres: bool = False, cosine: bool = False, euclidean: bool = False) -> float:
     """Given a Movie ID and a list of our user's ratings, return the predicted rating for each movie
     using collaborative filtering with a distance function of either cosine similarity or Pearson correlation"""
     numer = 0
@@ -258,6 +264,7 @@ def get_rating(mid, movies, our_user_ratings, all_other_user_ratings, our_avg,
         # n = the number of documents
         n = len(all_other_user_ratings)
         # get frequencies for all of the genres in our list of movies
+        # TODO move outside and pass in you dummy
         our_genre_frequencies = get_our_genre_frequencies(our_user_ratings, movies)
     for other_user_ratings in all_other_user_ratings:
         # for all the other users that we're comparing against
@@ -285,8 +292,12 @@ def get_rating(mid, movies, our_user_ratings, all_other_user_ratings, our_avg,
     return our_avg + (numer / denom)
 
 
-def get_genre_weight(our_user_ratings, other_user_ratings, our_genre_frequencies, movies, corpus, n, cosine, euclidean,
-                     augmented=False, boolean=False, logarithmic=True, smooth=True):
+def get_genre_weight(our_user_ratings: Dict[str, float], other_user_ratings: Dict[str, float],
+                     our_genre_frequencies: Dict[str, int], movies: Dict[str, NamedTuple],
+                     corpus: Dict[str, int], n: int,
+                     cosine: bool, euclidean: bool,
+                     augmented: bool = False, boolean: bool = False,
+                     logarithmic: bool = True, smooth: bool = True) -> float:
     """Return the distance between tf-idf vectors of the genres in our list of movies and the genres in the other
     user's list of movies."""
     genre_frequencies = {}
@@ -319,7 +330,7 @@ def get_genre_weight(our_user_ratings, other_user_ratings, our_genre_frequencies
         return pearson_correlation(our_vector, other_vector, our_avg, other_avg)
 
 
-def get_our_genre_frequencies(our_user_ratings, movies):
+def get_our_genre_frequencies(our_user_ratings: Dict[str, float], movies: Dict[str, NamedTuple]) -> Dict[str, int]:
     """Simply get the number of times each genre occurs in our list of ratings"""
     genre_frequencies = {}
     for mid, _ in our_user_ratings.items():
@@ -331,7 +342,8 @@ def get_our_genre_frequencies(our_user_ratings, movies):
     return genre_frequencies
 
 
-def tf_idf(genre_frequencies, genre, corpus, n, augmented, boolean, logarithmic, smooth):
+def tf_idf(genre_frequencies: Dict[str, int], genre: str, corpus: Dict[str, int], n: int,
+           augmented: bool, boolean: bool, logarithmic: bool, smooth: bool) -> float:
     """Compute the product of the term frequency and inverse document frequency for a given genre (query term)
     and a given document (the genre frequencies) derived from all the documents (all the other users who rated
     movies we're curious about)"""
@@ -341,7 +353,8 @@ def tf_idf(genre_frequencies, genre, corpus, n, augmented, boolean, logarithmic,
     return res
 
 
-def term_frequency(genre_frequencies, genre, augmented, boolean, logarithmic):
+def term_frequency(genre_frequencies: Dict[str, int], genre: str,
+                   augmented: bool, boolean: bool, logarithmic: bool) -> float:
     """Compute the term frequency using the specified method"""
     if augmented:
         return 0.5 + (0.5 * (genre_frequencies.get(genre, 0) / max(freq for _, freq in genre_frequencies.items())))
@@ -353,7 +366,7 @@ def term_frequency(genre_frequencies, genre, augmented, boolean, logarithmic):
         return genre_frequencies.get(genre, 0) / sum(freq for _, freq in genre_frequencies.items())
 
 
-def inverse_document_frequency(genre, corpus, n, smooth):
+def inverse_document_frequency(genre: str, corpus: Dict[str, int], n: int, smooth: bool) -> float:
     """Compute the inverse document frequency using the specified method"""
     try:
         total = corpus[genre]
@@ -365,7 +378,7 @@ def inverse_document_frequency(genre, corpus, n, smooth):
         return log(n / total)
 
 
-def get_movie_ids_from_webdb_ids(ids, full, tmdb):
+def get_movie_ids_from_webdb_ids(ids: List[str], full: bool, tmdb: bool) -> List[str]:
     """Given a list of IMDb IDs, return a list of Movie IDs corresponding to the same movie in the database"""
     filename = 'ml-latest/links.csv' if full else 'ml-latest-small/links.csv'
     with open(filename) as file:
@@ -377,7 +390,7 @@ def get_movie_ids_from_webdb_ids(ids, full, tmdb):
             return [mid for mid, imdb_id, _ in reader if imdb_id in ids]
 
 
-def get_movies_from_ids(movie_ids, get_all, full):
+def get_movies_from_ids(movie_ids: List[str], get_all: bool, full: bool) -> Dict[str, NamedTuple]:
     """Return a mapping from Movie IDs to a name, genres pair"""
     filename = 'ml-latest/movies.csv' if full else 'ml-latest-small/movies.csv'
     with open(filename) as file:
@@ -396,7 +409,7 @@ def get_movies_from_ids(movie_ids, get_all, full):
             return {mid: Movie(title, genres.split('|')) for mid, title, genres in reader if mid in movie_ids}
 
 
-def get_relevant_user_ratings(user_id, movie_ids, full):
+def get_relevant_user_ratings(user_id: str, movie_ids: List[str], full: bool) -> (Dict[str, float], List[Dict[str, float]]):
     """Given a User ID and a list of movies, return the User ID's ratings
     as well as all movies rated by any user who rated any of the movie_ids"""
     filename = 'ml-latest/ratings.csv' if full else 'ml-latest-small/ratings.csv'
@@ -433,7 +446,7 @@ def get_relevant_user_ratings(user_id, movie_ids, full):
     return our_user_ratings, all_other_user_ratings
 
 
-def round_stars(score):
+def round_stars(score: float) -> float:
     """Round the star score to the nearest half-integer"""
     return round(score * 2) / 2
 
